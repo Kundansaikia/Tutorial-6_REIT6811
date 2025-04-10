@@ -1,0 +1,70 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Mar 12 08:56:44 2025
+
+@author: uqksidot
+"""
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+from scipy.stats import weibull_min
+
+# Load the data from a CSV file
+data = pd.read_csv('Site 1.csv', header=None)
+time_data = data.iloc[:, 0]
+wind_raw = data.iloc[:, 1]
+
+# Get user inputs
+hub_height = float(input('What is the hub height of your turbine? '))
+ref = float(input('What is the reference height for the wind speed? '))
+alpha = float(input('What is the alpha for the site? '))
+
+# Convert the raw data to the hub height
+x1 = wind_raw * (hub_height / ref) ** alpha
+
+# Set the edges of the histogram bins
+bin_edges = np.arange(0, 26, 1)
+
+# Create the histogram
+frequencies, bin_edges = np.histogram(x1, bins=bin_edges)
+bin_centers = bin_edges[:-1] + np.diff(bin_edges) / 2
+
+# Define the Weibull distribution function
+def weibull_pdf(params, x):
+    c, k = params
+    return (k / c) * (x / c) ** (k - 1) * np.exp(-(x / c) ** k)
+
+# Define the negative log-likelihood function
+def negative_log_likelihood(params):
+    pdf_vals = weibull_pdf(params, bin_centers)
+    pdf_vals[pdf_vals == 0] = 1e-9  # Prevent log(0)
+    return -np.sum(frequencies * np.log(pdf_vals))
+
+# Initial guess for parameters
+params0 = [np.mean(x1), 1]
+
+# Find the parameter values that maximize the likelihood of the data
+result = minimize(negative_log_likelihood, params0, method='Nelder-Mead')
+c, k = result.x
+
+# Display the results
+print(f'c = {c:.2f}')
+print(f'k = {k:.2f}')
+
+# Plot the fitted Weibull distribution
+x = np.linspace(0, 25, 100)
+y = weibull_pdf([c, k], x)
+plt.plot(x, y, 'r-', linewidth=2, label='Weibull Fit')
+
+# Overlay the histogram on the plot
+plt.bar(bin_centers, frequencies / (np.sum(frequencies) * np.diff(bin_edges)[0]), 
+        width=np.diff(bin_edges)[0], color='none', edgecolor='b', label='Histogram')
+
+plt.xlabel('Value')
+plt.ylabel('Probability Density')
+plt.title('Weibull Fit to Wind Speed Data')
+plt.legend()
+plt.grid()
+plt.show()
